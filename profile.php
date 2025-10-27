@@ -2,26 +2,36 @@
 require_once 'config.php';
 requireLogin();
 
+// Check if uploads directory exists, create if not
+if (!file_exists('uploads')) {
+    mkdir('uploads', 0755, true);
+}
+
 $user = getCurrentUser();
 $success_message = '';
 $error_message = '';
 
-// Handle profile update
+// Handle all updates in single POST
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $updates_made = false;
+    
     // Handle profile information update
-    if (isset($_POST['full_name'])) {
+    if (!empty($_POST['full_name'])) {
         $full_name = trim($_POST['full_name']);
         $bio = trim($_POST['bio'] ?? '');
         $website = trim($_POST['website'] ?? '');
         $location = trim($_POST['location'] ?? '');
         
-        $stmt = $pdo->prepare("UPDATE users SET full_name = ?, bio = ?, website = ?, location = ? WHERE id = ?");
-        if ($stmt->execute([$full_name, $bio, $website, $location, $_SESSION['user_id']])) {
-            $success_message = "Profile updated successfully!";
-            // Refresh user data
-            $user = getCurrentUser();
-        } else {
-            $error_message = "Failed to update profile. Please try again.";
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET full_name = ?, bio = ?, website = ?, location = ? WHERE id = ?");
+            if ($stmt->execute([$full_name, $bio, $website, $location, $_SESSION['user_id']])) {
+                $success_message = "Profile updated successfully!";
+                $updates_made = true;
+            } else {
+                $error_message = "Failed to update profile. Please try again.";
+            }
+        } catch (PDOException $e) {
+            $error_message = "Database error: " . $e->getMessage();
         }
     }
     
@@ -30,14 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $upload_result = handleFileUpload($_FILES['profile_image'], 'image');
         
         if ($upload_result['success']) {
-            // Update database with new profile image
-            $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
-            if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
-                $success_message = $success_message ? $success_message . " Profile image updated!" : "Profile image updated successfully!";
-                // Refresh user data
-                $user = getCurrentUser();
-            } else {
-                $error_message = $error_message ? $error_message . " Failed to update profile image." : "Failed to update profile image in database.";
+            try {
+                $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
+                if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
+                    $success_message = $success_message ? $success_message . " Profile image updated!" : "Profile image updated successfully!";
+                    $updates_made = true;
+                } else {
+                    $error_message = $error_message ? $error_message . " Failed to update profile image." : "Failed to update profile image in database.";
+                }
+            } catch (PDOException $e) {
+                $error_message = "Database error: " . $e->getMessage();
             }
         } else {
             $error_message = $upload_result['error'];
@@ -49,43 +61,68 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $upload_result = handleFileUpload($_FILES['cover_image'], 'image');
         
         if ($upload_result['success']) {
-            // Update database with new cover image
-            $stmt = $pdo->prepare("UPDATE users SET cover_picture = ? WHERE id = ?");
-            if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
-                $success_message = $success_message ? $success_message . " Cover image updated!" : "Cover image updated successfully!";
-                // Refresh user data
-                $user = getCurrentUser();
+            try {
+                $stmt = $pdo->prepare("UPDATE users SET cover_picture = ? WHERE id = ?");
+                if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
+                    $success_message = $success_message ? $success_message . " Cover image updated!" : "Cover image updated successfully!";
+                    $updates_made = true;
+                }
+            } catch (PDOException $e) {
+                $error_message = "Database error: " . $e->getMessage();
             }
         } else {
             $error_message = $error_message ? $error_message . " " . $upload_result['error'] : $upload_result['error'];
         }
     }
+    
+    // Refresh user data if any updates were made
+    if ($updates_made) {
+        $user = getCurrentUser();
+    }
 }
 
 // Get user's posts
-$stmt = $pdo->prepare("
-    SELECT p.*, 
-           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count,
-           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
-    FROM posts p 
-    WHERE p.user_id = ? AND p.is_deleted = FALSE
-    ORDER BY p.created_at DESC
-");
-$stmt->execute([$_SESSION['user_id']]);
-$posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.*, 
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+        FROM posts p 
+        WHERE p.user_id = ? AND p.is_deleted = FALSE
+        ORDER BY p.created_at DESC
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $posts = [];
+    error_log("Error fetching posts: " . $e->getMessage());
+}
 
 // Get user stats
-$stmt = $pdo->prepare("
-    SELECT 
-        (SELECT COUNT(*) FROM posts WHERE user_id = ? AND is_deleted = FALSE) as post_count,
-        (SELECT COUNT(*) FROM friends WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted') as friend_count,
-        (SELECT COUNT(*) FROM likes WHERE user_id = ?) as like_count
-");
-$stmt->execute([$_SESSION['user_id'], $_SESSION['user_id'], $_SESSION['user_id'], $_SESSION['user_id']]);
-$stats = $stmt->fetch(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->prepare("
+        SELECT 
+            (SELECT COUNT(*) FROM posts WHERE user_id = ? AND is_deleted = FALSE) as post_count,
+            (SELECT COUNT(*) FROM friends WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted') as friend_count,
+            (SELECT COUNT(*) FROM likes WHERE user_id = ?) as like_count
+    ");
+    $stmt->execute([$_SESSION['user_id'], $_SESSION['user_id'], $_SESSION['user_id'], $_SESSION['user_id']]);
+    $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $stats = ['post_count' => 0, 'friend_count' => 0, 'like_count' => 0];
+    error_log("Error fetching stats: " . $e->getMessage());
+}
 
 // Get online friends count
-$online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
+$online_friends_count = function_exists('getOnlineFriendsCount') ? getOnlineFriendsCount($_SESSION['user_id']) : 0;
+
+// Ensure default values for images
+if (empty($user['profile_picture']) || !file_exists('uploads/' . $user['profile_picture'])) {
+    $user['profile_picture'] = 'default.jpg';
+}
+if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_picture'])) {
+    $user['cover_picture'] = '';
+}
 ?>
 
 <?php include 'header.php'; ?>
@@ -97,7 +134,9 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
         <div class="cover-photo-container position-relative">
             <div class="cover-photo position-relative" 
                  style="height: 300px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        background-image: url('uploads/<?php echo $user['cover_picture']; ?>'); 
+                        <?php if (!empty($user['cover_picture']) && file_exists('uploads/' . $user['cover_picture'])): ?>
+                        background-image: url('uploads/<?php echo htmlspecialchars($user['cover_picture']); ?>'); 
+                        <?php endif; ?>
                         background-size: cover; background-position: center;">
                 <div class="cover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-end justify-content-end p-3" 
                      style="background: rgba(0,0,0,0.3);">
@@ -113,11 +152,17 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
             <div class="row align-items-end">
                 <div class="col-md-2 text-center text-md-start">
                     <div class="profile-image-container position-relative d-inline-block">
-                        <img src="uploads/<?php echo $user['profile_picture']; ?>" 
-                             class="profile-image rounded-circle border border-4 border-white shadow" 
-                             alt="Profile Picture"
-                             style="width: 160px; height: 160px; object-fit: cover;"
-                             onerror="this.src='uploads/default.jpg'">
+                        <?php if (!empty($user['profile_picture']) && file_exists('uploads/' . $user['profile_picture'])): ?>
+                            <img src="uploads/<?php echo htmlspecialchars($user['profile_picture']); ?>" 
+                                 class="profile-image rounded-circle border border-4 border-white shadow" 
+                                 alt="Profile Picture"
+                                 style="width: 160px; height: 160px; object-fit: cover;">
+                        <?php else: ?>
+                            <div class="profile-image rounded-circle border border-4 border-white shadow d-flex align-items-center justify-content-center bg-light"
+                                 style="width: 160px; height: 160px;">
+                                <i class="fas fa-user fa-3x text-muted"></i>
+                            </div>
+                        <?php endif; ?>
                         <div class="profile-image-overlay position-absolute top-0 start-0 w-100 h-100 rounded-circle d-flex align-items-center justify-content-center"
                              style="background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s; cursor: pointer;"
                              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'"
@@ -186,6 +231,19 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
         </div>
     </div>
 
+    <!-- Main Form for All Updates -->
+    <form method="POST" enctype="multipart/form-data" id="mainForm">
+        <!-- Hidden fields for profile info -->
+        <input type="hidden" name="full_name" id="full_name_input" value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>">
+        <input type="hidden" name="bio" id="bio_input" value="<?php echo htmlspecialchars($user['bio'] ?? ''); ?>">
+        <input type="hidden" name="website" id="website_input" value="<?php echo htmlspecialchars($user['website'] ?? ''); ?>">
+        <input type="hidden" name="location" id="location_input" value="<?php echo htmlspecialchars($user['location'] ?? ''); ?>">
+        
+        <!-- File inputs -->
+        <input type="file" class="form-control" id="profileImage" name="profile_image" accept="image/*" style="display: none;">
+        <input type="file" class="form-control" id="coverImage" name="cover_image" accept="image/*" style="display: none;">
+    </form>
+
     <div class="row g-3">
         <!-- Left Sidebar -->
         <div class="col-12 col-lg-4">
@@ -209,40 +267,30 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
                     </div>
                     <?php endif; ?>
 
-                    <!-- Image Upload Forms -->
-                    <form method="POST" enctype="multipart/form-data" id="imageUploadForm">
-                        <!-- Profile Image Upload -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Profile Image</label>
-                            <div class="input-group">
-                                <input type="file" class="form-control" id="profileImage" name="profile_image" accept="image/*" 
-                                       onchange="previewImage(this, 'profilePreview')">
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('profileImage').click()">
-                                    <i class="fas fa-upload"></i>
-                                </button>
-                            </div>
-                            <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Square images work best.</div>
-                            <div id="profilePreview" class="mt-2 text-center"></div>
+                    <!-- Image Upload Controls -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Profile Image</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Select profile image" id="profileImageText" readonly>
+                            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profileImage').click()">
+                                <i class="fas fa-upload"></i> Browse
+                            </button>
                         </div>
-                        
-                        <!-- Cover Image Upload -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Cover Image</label>
-                            <div class="input-group">
-                                <input type="file" class="form-control" id="coverImage" name="cover_image" accept="image/*" 
-                                       onchange="previewImage(this, 'coverPreview')">
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('coverImage').click()">
-                                    <i class="fas fa-upload"></i>
-                                </button>
-                            </div>
-                            <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Wide images (1500x500) work best.</div>
-                            <div id="coverPreview" class="mt-2 text-center"></div>
+                        <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Square images work best.</div>
+                        <div id="profilePreview" class="mt-2 text-center"></div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Cover Image</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Select cover image" id="coverImageText" readonly>
+                            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('coverImage').click()">
+                                <i class="fas fa-upload"></i> Browse
+                            </button>
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-save me-2"></i>Save Images
-                        </button>
-                    </form>
+                        <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Wide images (1500x500) work best.</div>
+                        <div id="coverPreview" class="mt-2 text-center"></div>
+                    </div>
                 </div>
             </div>
 
@@ -252,37 +300,37 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
                     <h5 class="mb-0"><i class="fas fa-user-edit me-2"></i>Profile Information</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" id="profileInfoForm">
+                    <form id="profileInfoForm">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="full_name" 
+                            <input type="text" class="form-control" id="full_name" 
                                    value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" 
                                    placeholder="Enter your full name" required>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Bio</label>
-                            <textarea class="form-control" name="bio" rows="4" 
+                            <textarea class="form-control" id="bio" rows="4" 
                                       placeholder="Tell us about yourself..."><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
                             <div class="form-text">Share something about yourself with your friends.</div>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Location</label>
-                            <input type="text" class="form-control" name="location" 
+                            <input type="text" class="form-control" id="location" 
                                    value="<?php echo htmlspecialchars($user['location'] ?? ''); ?>" 
                                    placeholder="Where are you from?">
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Website</label>
-                            <input type="url" class="form-control" name="website" 
+                            <input type="url" class="form-control" id="website" 
                                    value="<?php echo htmlspecialchars($user['website'] ?? ''); ?>" 
                                    placeholder="https://example.com">
                             <div class="form-text">Include http:// or https://</div>
                         </div>
                         
-                        <button type="submit" class="btn btn-success w-100">
+                        <button type="button" class="btn btn-success w-100" onclick="updateProfileInfo()">
                             <i class="fas fa-check-circle me-2"></i>Update Profile
                         </button>
                     </form>
@@ -381,9 +429,16 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
                                     <!-- Post Header -->
                                     <div class="d-flex justify-content-between align-items-start mb-3">
                                         <div class="d-flex align-items-center">
-                                            <img src="uploads/<?php echo $user['profile_picture']; ?>" 
-                                                 class="profile-pic me-3" 
-                                                 alt="Profile">
+                                            <?php if (!empty($user['profile_picture']) && file_exists('uploads/' . $user['profile_picture'])): ?>
+                                                <img src="uploads/<?php echo htmlspecialchars($user['profile_picture']); ?>" 
+                                                     class="rounded-circle me-3" 
+                                                     alt="Profile" style="width: 40px; height: 40px; object-fit: cover;">
+                                            <?php else: ?>
+                                                <div class="rounded-circle me-3 d-flex align-items-center justify-content-center bg-light"
+                                                     style="width: 40px; height: 40px;">
+                                                    <i class="fas fa-user text-muted"></i>
+                                                </div>
+                                            <?php endif; ?>
                                             <div>
                                                 <h6 class="mb-0"><?php echo htmlspecialchars($user['full_name'] ?? $user['username']); ?></h6>
                                                 <small class="text-muted">
@@ -413,12 +468,13 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
                                     <?php endif; ?>
 
                                     <!-- Post Media -->
-                                    <?php if ($post['post_type'] === 'image' && $post['image']): ?>
+                                    <?php if ($post['post_type'] === 'image' && !empty($post['image'])): ?>
                                     <div class="post-media mb-3">
                                         <img src="uploads/<?php echo $post['image']; ?>" 
                                              class="img-fluid rounded" 
                                              alt="Post image" 
-                                             style="max-height: 400px; object-fit: cover;">
+                                             style="max-height: 400px; object-fit: cover;"
+                                             onerror="this.style.display='none'">
                                     </div>
                                     <?php endif; ?>
 
@@ -475,7 +531,7 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="document.getElementById('imageUploadForm').submit()">Use This Image</button>
+                <button type="button" class="btn btn-primary" onclick="uploadImageNow()">Use This Image</button>
             </div>
         </div>
     </div>
@@ -529,7 +585,8 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
         margin-top: -60px !important;
     }
     
-    .profile-image-container img {
+    .profile-image-container img,
+    .profile-image-container div {
         width: 120px !important;
         height: 120px !important;
     }
@@ -546,8 +603,44 @@ $online_friends_count = getOnlineFriendsCount($_SESSION['user_id']);
 </style>
 
 <script>
+// Update profile info via hidden fields
+function updateProfileInfo() {
+    // Update hidden fields
+    document.getElementById('full_name_input').value = document.getElementById('full_name').value;
+    document.getElementById('bio_input').value = document.getElementById('bio').value;
+    document.getElementById('location_input').value = document.getElementById('location').value;
+    document.getElementById('website_input').value = document.getElementById('website').value;
+    
+    // Show loading state
+    const btn = document.querySelector('#profileInfoForm button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
+    btn.disabled = true;
+    
+    // Submit the main form
+    document.getElementById('mainForm').submit();
+}
+
+// Auto-submit when files are selected
+document.getElementById('profileImage').addEventListener('change', function() {
+    if (this.files.length > 0) {
+        document.getElementById('profileImageText').value = this.files[0].name;
+        previewImage(this, 'profilePreview');
+    }
+});
+
+document.getElementById('coverImage').addEventListener('change', function() {
+    if (this.files.length > 0) {
+        document.getElementById('coverImageText').value = this.files[0].name;
+        previewImage(this, 'coverPreview');
+    }
+});
+
+let currentImageInput = null;
+
 function previewImage(input, previewId) {
     const preview = document.getElementById(previewId);
+    currentImageInput = input;
     
     if (input.files && input.files[0]) {
         const file = input.files[0];
@@ -556,6 +649,7 @@ function previewImage(input, previewId) {
         if (!file.type.startsWith('image/')) {
             alert('Please select an image file (JPG, PNG, GIF, or WebP)');
             input.value = '';
+            preview.innerHTML = '';
             return;
         }
         
@@ -563,13 +657,13 @@ function previewImage(input, previewId) {
         if (file.size > 5 * 1024 * 1024) {
             alert('File too large. Maximum size is 5MB.');
             input.value = '';
+            preview.innerHTML = '';
             return;
         }
         
         const reader = new FileReader();
         
         reader.onload = function(e) {
-            // Create preview
             preview.innerHTML = `
                 <div class="alert alert-info p-2">
                     <strong>Image Preview:</strong>
@@ -577,6 +671,12 @@ function previewImage(input, previewId) {
                     <div class="mt-2">
                         <button type="button" class="btn btn-sm btn-primary" onclick="showFullPreview('${e.target.result}')">
                             <i class="fas fa-expand me-1"></i>View Full Size
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="uploadImageNow()">
+                            <i class="fas fa-save me-1"></i>Upload Now
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="cancelImageUpload('${previewId}')">
+                            <i class="fas fa-times me-1"></i>Cancel
                         </button>
                     </div>
                 </div>
@@ -595,19 +695,37 @@ function showFullPreview(imageSrc) {
     modal.show();
 }
 
-// Form submission handling
-document.addEventListener('DOMContentLoaded', function() {
-    const forms = document.querySelectorAll('form');
-    
-    forms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            const submitBtn = this.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+function uploadImageNow() {
+    // Show loading state
+    const previews = document.querySelectorAll('#profilePreview, #coverPreview');
+    previews.forEach(preview => {
+        const buttons = preview.querySelectorAll('button');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            if (btn.classList.contains('btn-success')) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Uploading...';
             }
         });
     });
+    
+    document.getElementById('mainForm').submit();
+}
+
+function cancelImageUpload(previewId) {
+    document.getElementById(previewId).innerHTML = '';
+    if (currentImageInput) {
+        currentImageInput.value = '';
+    }
+    if (previewId === 'profilePreview') {
+        document.getElementById('profileImageText').value = '';
+    } else {
+        document.getElementById('coverImageText').value = '';
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Profile page loaded successfully');
     
     // Auto-size textareas
     const textareas = document.querySelectorAll('textarea');
@@ -618,40 +736,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Trigger initial resize
-        textarea.dispatchEvent(new Event('input'));
-    });
-});
-
-// Drag and drop functionality
-document.addEventListener('DOMContentLoaded', function() {
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    
-    fileInputs.forEach(input => {
-        const parent = input.closest('.mb-4');
-        
-        parent.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            this.style.backgroundColor = '#f8f9fa';
-            this.style.border = '2px dashed #007bff';
-        });
-        
-        parent.addEventListener('dragleave', function(e) {
-            e.preventDefault();
-            this.style.backgroundColor = '';
-            this.style.border = '';
-        });
-        
-        parent.addEventListener('drop', function(e) {
-            e.preventDefault();
-            this.style.backgroundColor = '';
-            this.style.border = '';
-            
-            if (e.dataTransfer.files.length) {
-                input.files = e.dataTransfer.files;
-                const event = new Event('change', { bubbles: true });
-                input.dispatchEvent(event);
-            }
-        });
+        setTimeout(() => {
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight) + 'px';
+        }, 100);
     });
 });
 </script>
