@@ -92,35 +92,35 @@ $recently_active = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php if ($online_count > 0): ?>
                                 <div class="row">
                                     <?php foreach ($online_friends as $friend): ?>
-                                    <div class="col-md-6 mb-3">
-                                        <div class="friend-card online-card">
-                                            <div class="d-flex align-items-center">
-                                                <div class="position-relative me-3">
-                                                    <img src="uploads/<?php echo $friend['profile_picture']; ?>" 
-                                                         class="friend-avatar" 
-                                                         alt="<?php echo htmlspecialchars($friend['username']); ?>">
-                                                    <div class="online-indicator pulse"></div>
-                                                </div>
-                                                <div class="flex-grow-1">
-                                                    <h6 class="mb-1"><?php echo htmlspecialchars($friend['full_name'] ?? $friend['username']); ?></h6>
-                                                    <p class="text-success mb-0 small">
-                                                        <i class="fas fa-circle me-1"></i>
-                                                        Online now
-                                                    </p>
-                                                    <small class="text-muted">
-                                                        Active <?php echo formatLastSeen($friend['last_activity']); ?>
-                                                    </small>
-                                                </div>
-                                                <div class="friend-actions">
-                                                    <a href="messages.php?friend_id=<?php echo $friend['id']; ?>" 
-                                                       class="btn btn-sm btn-outline-primary" 
-                                                       title="Send message">
-                                                        <i class="fas fa-comment"></i>
-                                                    </a>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="friend-card online-card">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="position-relative me-3">
+                                                        <img src="uploads/<?php echo $friend['profile_picture']; ?>"
+                                                            class="friend-avatar"
+                                                            alt="<?php echo htmlspecialchars($friend['username']); ?>">
+                                                        <div class="online-indicator pulse"></div>
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1"><?php echo htmlspecialchars($friend['full_name'] ?? $friend['username']); ?></h6>
+                                                        <p class="text-success mb-0 small">
+                                                            <i class="fas fa-circle me-1"></i>
+                                                            Online now
+                                                        </p>
+                                                        <small class="text-muted">
+                                                            Active <?php echo formatLastSeen($friend['last_activity']); ?>
+                                                        </small>
+                                                    </div>
+                                                    <div class="friend-actions">
+                                                        <a href="messages.php?friend_id=<?php echo $friend['id']; ?>"
+                                                            class="btn btn-sm btn-outline-primary"
+                                                            title="Send message">
+                                                            <i class="fas fa-comment"></i>
+                                                        </a>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
                                     <?php endforeach; ?>
                                 </div>
                             <?php else: ?>
@@ -145,41 +145,43 @@ $recently_active = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php if ($recently_active): ?>
                                 <div class="list-group list-group-flush">
                                     <?php foreach ($recently_active as $friend): ?>
-                                    <div class="list-group-item">
-                                        <div class="d-flex align-items-center">
-                                            <div class="position-relative me-3">
-                                                <img src="uploads/<?php echo $friend['profile_picture']; ?>" 
-                                                     class="friend-avatar-sm" 
-                                                     alt="<?php echo htmlspecialchars($friend['username']); ?>">
-                                                <?php if (isUserOnline($friend['id'])): ?>
-                                                <div class="online-indicator-sm"></div>
-                                                <?php else: ?>
-                                                <div class="offline-indicator-sm"></div>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1"><?php echo htmlspecialchars($friend['full_name'] ?? $friend['username']); ?></h6>
-                                                <p class="text-muted mb-0 small">
-                                                    <?php if (isUserOnline($friend['id'])): ?>
-                                                    <span class="text-success">
-                                                        <i class="fas fa-circle me-1"></i>Online now
-                                                    </span>
+                                        <div class="list-group-item">
+                                            <div class="d-flex align-items-center">
+                                                <div class="position-relative me-3">
+                                                    <img src="uploads/
+                            <?php echo $friend['profile_picture']; ?>"
+                                                        class="profile-pic me-3"
+                                                        alt="<?php echo htmlspecialchars($friend['username']); ?>"
+                                                        onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($friend['username']); ?>&background=6366f1&color=fff'">
+                                                    <div class="online-status"></div> <?php if (isUserOnline($friend['id'])): ?>
+                                                        <div class="online-indicator-sm"></div>
                                                     <?php else: ?>
-                                                    <span class="text-muted">
-                                                        <i class="fas fa-clock me-1"></i>
-                                                        Last seen <?php echo formatLastSeen($friend['last_seen']); ?>
-                                                    </span>
+                                                        <div class="offline-indicator-sm"></div>
                                                     <?php endif; ?>
-                                                </p>
-                                            </div>
-                                            <div class="friend-actions">
-                                                <a href="messages.php?friend_id=<?php echo $friend['id']; ?>" 
-                                                   class="btn btn-sm btn-outline-primary">
-                                                    <i class="fas fa-comment"></i>
-                                                </a>
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1"><?php echo htmlspecialchars($friend['full_name'] ?? $friend['username']); ?></h6>
+                                                    <p class="text-muted mb-0 small">
+                                                        <?php if (isUserOnline($friend['id'])): ?>
+                                                            <span class="text-success">
+                                                                <i class="fas fa-circle me-1"></i>Online now
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">
+                                                                <i class="fas fa-clock me-1"></i>
+                                                                Last seen <?php echo formatLastSeen($friend['last_seen']); ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </p>
+                                                </div>
+                                                <div class="friend-actions">
+                                                    <a href="messages.php?friend_id=<?php echo $friend['id']; ?>"
+                                                        class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-comment"></i>
+                                                    </a>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
                                     <?php endforeach; ?>
                                 </div>
                             <?php else: ?>
@@ -269,42 +271,42 @@ $recently_active = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-function startGroupChat() {
-    const onlineFriends = <?php echo json_encode($online_friends); ?>;
-    
-    if (onlineFriends.length === 0) {
-        alert('No online friends to start a group chat with.');
-        return;
-    }
-    
-    // In a real application, this would open a group chat modal
-    const friendNames = onlineFriends.map(friend => friend.full_name || friend.username).join(', ');
-    alert(`Starting group chat with: ${friendNames}`);
-}
+    function startGroupChat() {
+        const onlineFriends = <?php echo json_encode($online_friends); ?>;
 
-// Auto-refresh every 30 seconds
-setTimeout(() => {
-    location.reload();
-}, 30000);
-
-// Status toggle functionality
-document.getElementById('statusToggle').addEventListener('change', function() {
-    const status = this.checked ? 'online' : 'offline';
-    
-    fetch('update_status.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'status=' + status
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            console.log('Status updated to:', status);
+        if (onlineFriends.length === 0) {
+            alert('No online friends to start a group chat with.');
+            return;
         }
+
+        // In a real application, this would open a group chat modal
+        const friendNames = onlineFriends.map(friend => friend.full_name || friend.username).join(', ');
+        alert(`Starting group chat with: ${friendNames}`);
+    }
+
+    // Auto-refresh every 30 seconds
+    setTimeout(() => {
+        location.reload();
+    }, 30000);
+
+    // Status toggle functionality
+    document.getElementById('statusToggle').addEventListener('change', function() {
+        const status = this.checked ? 'online' : 'offline';
+
+        fetch('update_status.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'status=' + status
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Status updated to:', status);
+                }
+            });
     });
-});
 </script>
 
 <?php include 'footer.php'; ?>

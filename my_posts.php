@@ -47,7 +47,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
             <!-- Stats Cards -->
             <div class="row mb-4">
-                <div class="col-md-4">
+                <div class="col-md-4 mb-3">
                     <div class="card bg-primary text-white">
                         <div class="card-body text-center">
                             <h3 class="mb-0"><?php echo $stats['total_posts'] ?? 0; ?></h3>
@@ -55,7 +55,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4 mb-3">
                     <div class="card bg-success text-white">
                         <div class="card-body text-center">
                             <h3 class="mb-0"><?php echo $stats['total_likes'] ?? 0; ?></h3>
@@ -63,7 +63,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4 mb-3">
                     <div class="card bg-info text-white">
                         <div class="card-body text-center">
                             <h3 class="mb-0"><?php echo $stats['total_comments'] ?? 0; ?></h3>
@@ -78,7 +78,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                 <div class="card-header">
                     <h5 class="mb-0">All Posts (<?php echo count($posts); ?>)</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <?php if (empty($posts)): ?>
                     <div class="text-center py-5">
                         <i class="fas fa-edit fa-3x text-muted mb-3"></i>
@@ -88,45 +88,11 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                     </div>
                     <?php else: ?>
                         <?php foreach ($posts as $post): ?>
-                        <div class="post-management-item border-bottom pb-4 mb-4 position-relative">
-                            <!-- Quick Actions -->
-                            <div class="position-absolute top-0 end-0 mt-2">
-                                <br><br><br>
-                                <div class="btn-group">
-                                    <a href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode('my_posts.php'); ?>" 
-                                       class="btn btn-sm btn-outline-danger"
-                                       title="Delete post">
-                                        <i class="fas fa-trash"></i>
-                                    </a>
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li>
-                                            <a class="dropdown-item" href="index.php?edit=<?php echo $post['id']; ?>">
-                                                <i class="fas fa-edit me-2"></i>Edit
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="#" onclick="copyPostLink(<?php echo $post['id']; ?>)">
-                                                <i class="fas fa-link me-2"></i>Copy Link
-                                            </a>
-                                        </li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <a class="dropdown-item text-danger" 
-                                               href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode('my_posts.php'); ?>">
-                                                <i class="fas fa-trash me-2"></i>Delete
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <!-- Post Content -->
-                            <div class="row">
+                        <div class="post-item p-4 border-bottom">
+                            <div class="row align-items-start">
+                                <!-- Post Content -->
                                 <div class="col-md-8">
-                                    <div class="mb-2">
+                                    <div class="d-flex align-items-center mb-2">
                                         <span class="badge bg-<?php 
                                             switch($post['post_type']) {
                                                 case 'image': echo 'info'; break;
@@ -162,21 +128,34 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                                     <?php endif; ?>
                                 </div>
                                 
+                                <!-- Stats and Actions -->
                                 <div class="col-md-4">
-                                    <div class="post-stats text-end">
-                                        <div class="d-flex justify-content-end gap-3 mb-2">
-                                            <span class="text-muted">
-                                                <i class="fas fa-heart text-danger me-1"></i>
-                                                <?php echo $post['like_count']; ?> likes
-                                            </span>
-                                            <span class="text-muted">
-                                                <i class="fas fa-comment me-1"></i>
-                                                <?php echo $post['comment_count']; ?> comments
-                                            </span>
+                                    <div class="d-flex flex-column align-items-end h-100">
+                                        <!-- Stats -->
+                                        <div class="mb-3 text-end">
+                                            <div class="d-flex justify-content-end gap-3 mb-2">
+                                                <span class="text-muted">
+                                                    <i class="fas fa-heart text-danger me-1"></i>
+                                                    <?php echo $post['like_count']; ?> likes
+                                                </span>
+                                                <span class="text-muted">
+                                                    <i class="fas fa-comment me-1"></i>
+                                                    <?php echo $post['comment_count']; ?> comments
+                                                </span>
+                                            </div>
                                         </div>
-                                        <a href="index.php?post=<?php echo $post['id']; ?>" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye me-1"></i>View Post
-                                        </a>
+                                        
+                                        <!-- Actions -->
+                                        <div class="d-flex gap-2 mt-auto">
+                                            <a href="index.php?post=<?php echo $post['id']; ?>" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye me-1"></i>View
+                                            </a>
+                                            <a href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode('my_posts.php'); ?>" 
+                                               class="btn btn-sm btn-outline-danger"
+                                               title="Delete post">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -1,14 +1,15 @@
 <?php
 require_once 'config.php';
 
-// Get public posts (most popular/latest)
+// Get only PUBLIC posts (exclude friends-only posts)
 $stmt = $pdo->prepare("
     SELECT p.*, u.username, u.profile_picture, u.full_name,
            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count,
            (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
     FROM posts p
     JOIN users u ON p.user_id = u.id
-    WHERE p.is_deleted = FALSE
+    WHERE p.is_deleted = FALSE 
+    AND p.privacy = 'public'  -- ONLY SHOW PUBLIC POSTS
     ORDER BY p.created_at DESC
     LIMIT 20
 ");
@@ -19,7 +20,7 @@ $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->prepare("
     SELECT 
         (SELECT COUNT(*) FROM users) as user_count,
-        (SELECT COUNT(*) FROM posts WHERE is_deleted = FALSE) as post_count,
+        (SELECT COUNT(*) FROM posts WHERE is_deleted = FALSE AND privacy = 'public') as post_count,
         (SELECT COUNT(*) FROM likes) as like_count,
         (SELECT COUNT(*) FROM comments WHERE is_deleted = FALSE) as comment_count
 ");
@@ -55,14 +56,14 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         }
 
         .hero-section {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(58, 74, 100, 0.9);
             backdrop-filter: blur(20px);
             border-radius: 20px;
             margin-top: 2rem;
         }
 
         .stats-card {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(58, 74, 100, 0.9);
             backdrop-filter: blur(10px);
             border: none;
             border-radius: 15px;
@@ -74,7 +75,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         }
 
         .post-card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(58, 74, 100, 0.9);
             backdrop-filter: blur(10px);
             border: none;
             border-radius: 15px;
@@ -110,6 +111,34 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
             margin-bottom: 1rem;
         }
 
+        /* Privacy Badge Styles */
+        .privacy-badge {
+            font-size: 0.7rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .privacy-public {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+
+        .public-post-indicator {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
         @media (max-width: 768px) {
             .hero-section {
                 margin-top: 1rem;
@@ -140,7 +169,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                     </h1>
                     <p class="lead mb-4">
                         Join our community of <?php echo number_format($stats['user_count']); ?>+ users sharing 
-                        <?php echo number_format($stats['post_count']); ?>+ posts and 
+                        <?php echo number_format($stats['post_count']); ?>+ public posts and 
                         <?php echo number_format($stats['like_count']); ?>+ likes!
                     </p>
                     <div class="d-flex gap-3 flex-wrap">
@@ -174,7 +203,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                 <div class="stats-card text-center p-4">
                     <i class="fas fa-newspaper feature-icon"></i>
                     <h3 class="text-success"><?php echo number_format($stats['post_count']); ?></h3>
-                    <p class="text-muted mb-0">Total Posts</p>
+                    <p class="text-muted mb-0">Public Posts</p>
                 </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
@@ -233,20 +262,26 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                         <i class="fas fa-globe-americas me-2"></i>Public Feed
                     </h2>
                     <div class="text-white">
-                        <small>Showing latest <?php echo count($posts); ?> posts</small>
+                        <small>Showing latest <?php echo count($posts); ?> public posts</small>
                     </div>
                 </div>
 
                 <?php if (empty($posts)): ?>
                 <div class="stats-card text-center p-5">
                     <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                    <h4 class="text-muted">No posts yet</h4>
-                    <p class="text-muted">Be the first to join and start sharing!</p>
+                    <h4 class="text-muted">No public posts yet</h4>
+                    <p class="text-muted">Be the first to join and start sharing public posts!</p>
                     <a href="register.php" class="btn btn-primary">Join Now</a>
                 </div>
                 <?php else: ?>
                     <?php foreach ($posts as $post): ?>
                     <div class="post-card p-4">
+                        <!-- Public Post Indicator -->
+                        <div class="public-post-indicator">
+                            <i class="fas fa-globe-americas"></i>
+                            Public Post - Visible to Everyone
+                        </div>
+
                         <div class="d-flex align-items-center mb-3">
                             <img src="uploads/<?php echo $post['profile_picture']; ?>" 
                                  class="profile-pic me-3" 
@@ -259,18 +294,44 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                                     <?php echo date('M j, Y g:i A', strtotime($post['created_at'])); ?>
                                 </small>
                             </div>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
-                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-ellipsis-h"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="login.php">
-                                            <i class="fas fa-sign-in-alt me-2"></i>Login to Interact
-                                        </a>
-                                    </li>
-                                </ul>
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- Privacy Badge -->
+                                <span class="privacy-badge privacy-<?php echo $post['privacy']; ?>">
+                                    <i class="fas fa-<?php echo $post['privacy'] === 'public' ? 'globe' : 'users'; ?> me-1"></i>
+                                    <?php echo ucfirst($post['privacy']); ?>
+                                </span>
+                                
+                                <!-- Post Type Badge -->
+                                <span class="privacy-badge" style="background:#e8f5e8; color:#2e7d32; border:1px solid #c8e6c9;">
+                                    <i class="fas fa-<?php 
+                                        switch($post['post_type']) {
+                                            case 'image': echo 'image'; break;
+                                            case 'video': echo 'video'; break;
+                                            case 'location': echo 'map-marker-alt'; break;
+                                            default: echo 'file-alt';
+                                        }
+                                    ?> me-1"></i>
+                                    <?php echo ucfirst($post['post_type']); ?>
+                                </span>
+                                
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li>
+                                            <a class="dropdown-item" href="login.php">
+                                                <i class="fas fa-sign-in-alt me-2"></i>Login to Interact
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="public_post.php?id=<?php echo $post['id']; ?>">
+                                                <i class="fas fa-external-link-alt me-2"></i>View Full Post
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         
@@ -330,13 +391,15 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                                 </span>
                             </div>
                             <small>
-                                <i class="fas fa-share me-1"></i>
-                                Share
+                                <a href="public_post.php?id=<?php echo $post['id']; ?>" class="text-muted text-decoration-none">
+                                    <i class="fas fa-external-link-alt me-1"></i>
+                                    View Post
+                                </a>
                             </small>
                         </div>
                         
                         <!-- Login Prompt -->
-                        <div class="login-prompt bg-light p-3 rounded mt-3 text-center">
+                        <div class="login-prompt  p-3 rounded mt-3 text-center">
                             <p class="mb-2">
                                 <i class="fas fa-lock me-2 text-muted"></i>
                                 Want to like, comment, or share this post?
@@ -377,71 +440,6 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         </div>
     </div>
 
-    <!-- Footer -->
-    <!-- <footer class="bg-dark text-white py-5 mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-4 mb-4">
-                    <h5 class="mb-3">
-                        <i class="fas fa-users me-2"></i>SocialConnect
-                    </h5>
-                    <p class="text-muted">
-                        Connect with friends, share your moments, and discover amazing content in our social community.
-                    </p>
-                </div>
-                <div class="col-lg-2 col-6 mb-4">
-                    <h6 class="mb-3">Platform</h6>
-                    <ul class="list-unstyled">
-                        <li><a href="public.php" class="text-muted text-decoration-none">Home</a></li>
-                        <li><a href="#public-feed" class="text-muted text-decoration-none">Public Feed</a></li>
-                        <li><a href="login.php" class="text-muted text-decoration-none">Login</a></li>
-                        <li><a href="register.php" class="text-muted text-decoration-none">Register</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-2 col-6 mb-4">
-                    <h6 class="mb-3">Features</h6>
-                    <ul class="list-unstyled">
-                        <li><a href="#" class="text-muted text-decoration-none">Posts</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Messages</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Friends</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Photos</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-4 mb-4">
-                    <h6 class="mb-3">Get Started</h6>
-                    <p class="text-muted mb-3">
-                        Ready to join our growing community? Sign up now and start connecting!
-                    </p>
-                    <a href="register.php" class="btn btn-primary">
-                        <i class="fas fa-rocket me-2"></i>Start Your Journey
-                    </a>
-                </div>
-            </div>
-            <hr class="my-4">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <p class="text-muted mb-0">
-                        &copy; 2024 SocialConnect. All rights reserved.
-                    </p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <div class="d-flex gap-3 justify-content-md-end">
-                        <a href="#" class="text-muted"><i class="fab fa-facebook fa-lg"></i></a>
-                        <a href="#" class="text-muted"><i class="fab fa-twitter fa-lg"></i></a>
-                        <a href="#" class="text-muted"><i class="fab fa-instagram fa-lg"></i></a>
-                        <a href="#" class="text-muted"><i class="fab fa-linkedin fa-lg"></i></a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </footer> -->
-    <!-- In the post loop, add this after the post content: -->
-<div class="text-end mt-3">
-    <a href="public_post.php?id=<?php echo $post['id']; ?>" class="btn btn-outline-primary btn-sm">
-        <i class="fas fa-external-link-alt me-1"></i>View Post
-    </a>
-</div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Smooth scrolling for anchor links
@@ -463,7 +461,7 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
             const buttons = document.querySelectorAll('.btn');
             buttons.forEach(button => {
                 button.addEventListener('click', function() {
-                    if (this.href) {
+                    if (this.href && !this.classList.contains('dropdown-toggle')) {
                         this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
                     }
                 });

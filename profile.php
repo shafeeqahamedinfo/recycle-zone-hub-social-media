@@ -11,22 +11,20 @@ $user = getCurrentUser();
 $success_message = '';
 $error_message = '';
 
-// Handle all updates in single POST
+// Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $updates_made = false;
     
-    // Handle profile information update
-    if (!empty($_POST['full_name'])) {
-        $full_name = trim($_POST['full_name']);
-        $bio = trim($_POST['bio'] ?? '');
-        $website = trim($_POST['website'] ?? '');
-        $location = trim($_POST['location'] ?? '');
-        
+    // Basic profile info
+    $full_name = trim($_POST['full_name'] ?? '');
+    $bio = trim($_POST['bio'] ?? '');
+    $website = trim($_POST['website'] ?? '');
+    $location = trim($_POST['location'] ?? '');
+    
+    if (!empty($full_name)) {
         try {
             $stmt = $pdo->prepare("UPDATE users SET full_name = ?, bio = ?, website = ?, location = ? WHERE id = ?");
             if ($stmt->execute([$full_name, $bio, $website, $location, $_SESSION['user_id']])) {
                 $success_message = "Profile updated successfully!";
-                $updates_made = true;
             } else {
                 $error_message = "Failed to update profile. Please try again.";
             }
@@ -35,50 +33,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Handle profile image upload
+    // Handle profile image
     if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
         $upload_result = handleFileUpload($_FILES['profile_image'], 'image');
-        
         if ($upload_result['success']) {
             try {
                 $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
                 if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
                     $success_message = $success_message ? $success_message . " Profile image updated!" : "Profile image updated successfully!";
-                    $updates_made = true;
-                } else {
-                    $error_message = $error_message ? $error_message . " Failed to update profile image." : "Failed to update profile image in database.";
                 }
             } catch (PDOException $e) {
-                $error_message = "Database error: " . $e->getMessage();
+                $error_message = $error_message ? $error_message . " Failed to update profile image." : "Failed to update profile image.";
             }
         } else {
             $error_message = $upload_result['error'];
         }
     }
     
-    // Handle cover image upload
+    // Handle cover image
     if (isset($_FILES['cover_image']) && $_FILES['cover_image']['error'] === UPLOAD_ERR_OK) {
         $upload_result = handleFileUpload($_FILES['cover_image'], 'image');
-        
         if ($upload_result['success']) {
             try {
                 $stmt = $pdo->prepare("UPDATE users SET cover_picture = ? WHERE id = ?");
                 if ($stmt->execute([$upload_result['filename'], $_SESSION['user_id']])) {
                     $success_message = $success_message ? $success_message . " Cover image updated!" : "Cover image updated successfully!";
-                    $updates_made = true;
                 }
             } catch (PDOException $e) {
-                $error_message = "Database error: " . $e->getMessage();
+                $error_message = $error_message ? $error_message . " Failed to update cover image." : "Failed to update cover image.";
             }
         } else {
             $error_message = $error_message ? $error_message . " " . $upload_result['error'] : $upload_result['error'];
         }
     }
     
-    // Refresh user data if any updates were made
-    if ($updates_made) {
-        $user = getCurrentUser();
-    }
+    // Refresh user data
+    $user = getCurrentUser();
 }
 
 // Get user's posts
@@ -138,12 +128,14 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
                         background-image: url('uploads/<?php echo htmlspecialchars($user['cover_picture']); ?>'); 
                         <?php endif; ?>
                         background-size: cover; background-position: center;">
+                <?php if (!empty($user['cover_picture']) && file_exists('uploads/' . $user['cover_picture'])): ?>
                 <div class="cover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-end justify-content-end p-3" 
                      style="background: rgba(0,0,0,0.3);">
-                    <button type="button" class="btn btn-light btn-sm" onclick="document.getElementById('coverImage').click()">
-                        <i class="fas fa-camera me-2"></i>Update Cover
-                    </button>
+                    <span class="badge bg-light text-dark">
+                        <i class="fas fa-camera me-1"></i>Cover Photo
+                    </span>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -163,12 +155,6 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
                                 <i class="fas fa-user fa-3x text-muted"></i>
                             </div>
                         <?php endif; ?>
-                        <div class="profile-image-overlay position-absolute top-0 start-0 w-100 h-100 rounded-circle d-flex align-items-center justify-content-center"
-                             style="background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s; cursor: pointer;"
-                             onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'"
-                             onclick="document.getElementById('profileImage').click()">
-                            <i class="fas fa-camera text-white fa-2x"></i>
-                        </div>
                     </div>
                 </div>
                 
@@ -231,26 +217,13 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
         </div>
     </div>
 
-    <!-- Main Form for All Updates -->
-    <form method="POST" enctype="multipart/form-data" id="mainForm">
-        <!-- Hidden fields for profile info -->
-        <input type="hidden" name="full_name" id="full_name_input" value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>">
-        <input type="hidden" name="bio" id="bio_input" value="<?php echo htmlspecialchars($user['bio'] ?? ''); ?>">
-        <input type="hidden" name="website" id="website_input" value="<?php echo htmlspecialchars($user['website'] ?? ''); ?>">
-        <input type="hidden" name="location" id="location_input" value="<?php echo htmlspecialchars($user['location'] ?? ''); ?>">
-        
-        <!-- File inputs -->
-        <input type="file" class="form-control" id="profileImage" name="profile_image" accept="image/*" style="display: none;">
-        <input type="file" class="form-control" id="coverImage" name="cover_image" accept="image/*" style="display: none;">
-    </form>
-
     <div class="row g-3">
         <!-- Left Sidebar -->
         <div class="col-12 col-lg-4">
-            <!-- Image Upload Card -->
+            <!-- Profile Update Form -->
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-images me-2"></i>Update Images</h5>
+                    <h5 class="mb-0"><i class="fas fa-user-edit me-2"></i>Update Profile</h5>
                 </div>
                 <div class="card-body">
                     <?php if ($success_message): ?>
@@ -267,70 +240,54 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
                     </div>
                     <?php endif; ?>
 
-                    <!-- Image Upload Controls -->
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Profile Image</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Select profile image" id="profileImageText" readonly>
-                            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profileImage').click()">
-                                <i class="fas fa-upload"></i> Browse
-                            </button>
-                        </div>
-                        <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Square images work best.</div>
-                        <div id="profilePreview" class="mt-2 text-center"></div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Cover Image</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Select cover image" id="coverImageText" readonly>
-                            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('coverImage').click()">
-                                <i class="fas fa-upload"></i> Browse
-                            </button>
-                        </div>
-                        <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Wide images (1500x500) work best.</div>
-                        <div id="coverPreview" class="mt-2 text-center"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Profile Information Card -->
-            <div class="card mt-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="fas fa-user-edit me-2"></i>Profile Information</h5>
-                </div>
-                <div class="card-body">
-                    <form id="profileInfoForm">
+                    <form method="POST" enctype="multipart/form-data">
+                        <!-- Profile Information -->
                         <div class="mb-3">
                             <label class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="full_name" 
+                            <input type="text" class="form-control" name="full_name" 
                                    value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" 
                                    placeholder="Enter your full name" required>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Bio</label>
-                            <textarea class="form-control" id="bio" rows="4" 
+                            <textarea class="form-control" name="bio" rows="4" 
                                       placeholder="Tell us about yourself..."><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
                             <div class="form-text">Share something about yourself with your friends.</div>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Location</label>
-                            <input type="text" class="form-control" id="location" 
+                            <input type="text" class="form-control" name="location" 
                                    value="<?php echo htmlspecialchars($user['location'] ?? ''); ?>" 
                                    placeholder="Where are you from?">
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Website</label>
-                            <input type="url" class="form-control" id="website" 
+                            <input type="url" class="form-control" name="website" 
                                    value="<?php echo htmlspecialchars($user['website'] ?? ''); ?>" 
                                    placeholder="https://example.com">
                             <div class="form-text">Include http:// or https://</div>
                         </div>
+
+                        <!-- Profile Image Upload -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Profile Image</label>
+                            <input type="file" class="form-control" name="profile_image" accept="image/*">
+                            <div id="profile_image_preview" class="mt-1"></div>
+                            <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Square images work best.</div>
+                        </div>
                         
-                        <button type="button" class="btn btn-success w-100" onclick="updateProfileInfo()">
+                        <!-- Cover Image Upload -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Cover Image</label>
+                            <input type="file" class="form-control" name="cover_image" accept="image/*">
+                            <div id="cover_image_preview" class="mt-1"></div>
+                            <div class="form-text">JPG, PNG, GIF, or WebP. Max 5MB. Wide images (1500x500) work best.</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100">
                             <i class="fas fa-check-circle me-2"></i>Update Profile
                         </button>
                     </form>
@@ -518,25 +475,6 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
     </div>
 </div>
 
-<!-- Image Preview Modal -->
-<div class="modal fade" id="imagePreviewModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Image Preview</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <img id="modalPreviewImage" src="" class="img-fluid" alt="Preview">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="uploadImageNow()">Use This Image</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
 .profile-header {
     border: none;
@@ -603,129 +541,35 @@ if (empty($user['cover_picture']) || !file_exists('uploads/' . $user['cover_pict
 </style>
 
 <script>
-// Update profile info via hidden fields
-function updateProfileInfo() {
-    // Update hidden fields
-    document.getElementById('full_name_input').value = document.getElementById('full_name').value;
-    document.getElementById('bio_input').value = document.getElementById('bio').value;
-    document.getElementById('location_input').value = document.getElementById('location').value;
-    document.getElementById('website_input').value = document.getElementById('website').value;
-    
-    // Show loading state
-    const btn = document.querySelector('#profileInfoForm button');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
-    btn.disabled = true;
-    
-    // Submit the main form
-    document.getElementById('mainForm').submit();
-}
-
-// Auto-submit when files are selected
-document.getElementById('profileImage').addEventListener('change', function() {
-    if (this.files.length > 0) {
-        document.getElementById('profileImageText').value = this.files[0].name;
-        previewImage(this, 'profilePreview');
-    }
-});
-
-document.getElementById('coverImage').addEventListener('change', function() {
-    if (this.files.length > 0) {
-        document.getElementById('coverImageText').value = this.files[0].name;
-        previewImage(this, 'coverPreview');
-    }
-});
-
-let currentImageInput = null;
-
-function previewImage(input, previewId) {
-    const preview = document.getElementById(previewId);
-    currentImageInput = input;
-    
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file (JPG, PNG, GIF, or WebP)');
-            input.value = '';
-            preview.innerHTML = '';
-            return;
-        }
-        
-        // Validate file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('File too large. Maximum size is 5MB.');
-            input.value = '';
-            preview.innerHTML = '';
-            return;
-        }
-        
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            preview.innerHTML = `
-                <div class="alert alert-info p-2">
-                    <strong>Image Preview:</strong>
-                    <img src="${e.target.result}" class="img-thumbnail mt-2" style="max-height: 150px;">
-                    <div class="mt-2">
-                        <button type="button" class="btn btn-sm btn-primary" onclick="showFullPreview('${e.target.result}')">
-                            <i class="fas fa-expand me-1"></i>View Full Size
-                        </button>
-                        <button type="button" class="btn btn-sm btn-success" onclick="uploadImageNow()">
-                            <i class="fas fa-save me-1"></i>Upload Now
-                        </button>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="cancelImageUpload('${previewId}')">
-                            <i class="fas fa-times me-1"></i>Cancel
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-        
-        reader.readAsDataURL(file);
-    } else {
-        preview.innerHTML = '';
-    }
-}
-
-function showFullPreview(imageSrc) {
-    document.getElementById('modalPreviewImage').src = imageSrc;
-    const modal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
-    modal.show();
-}
-
-function uploadImageNow() {
-    // Show loading state
-    const previews = document.querySelectorAll('#profilePreview, #coverPreview');
-    previews.forEach(preview => {
-        const buttons = preview.querySelectorAll('button');
-        buttons.forEach(btn => {
-            btn.disabled = true;
-            if (btn.classList.contains('btn-success')) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Uploading...';
+// Simple file input display
+document.addEventListener('DOMContentLoaded', function() {
+    // Show filename when file is selected
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    fileInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                const preview = document.getElementById(this.name + '_preview');
+                if (preview) {
+                    preview.innerHTML = `<small class="text-success"><i class="fas fa-check me-1"></i>Selected: ${this.files[0].name}</small>`;
+                }
+                
+                // Simple image preview
+                if (this.files[0].type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        if (preview) {
+                            preview.innerHTML += `
+                                <div class="mt-2">
+                                    <img src="${e.target.result}" class="img-thumbnail" style="max-height: 100px;">
+                                </div>
+                            `;
+                        }
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                }
             }
         });
     });
-    
-    document.getElementById('mainForm').submit();
-}
-
-function cancelImageUpload(previewId) {
-    document.getElementById(previewId).innerHTML = '';
-    if (currentImageInput) {
-        currentImageInput.value = '';
-    }
-    if (previewId === 'profilePreview') {
-        document.getElementById('profileImageText').value = '';
-    } else {
-        document.getElementById('coverImageText').value = '';
-    }
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Profile page loaded successfully');
     
     // Auto-size textareas
     const textareas = document.querySelectorAll('textarea');
@@ -736,11 +580,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Trigger initial resize
-        setTimeout(() => {
-            textarea.style.height = 'auto';
-            textarea.style.height = (textarea.scrollHeight) + 'px';
-        }, 100);
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
     });
+});
+
+// Simple form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const fullName = document.querySelector('input[name="full_name"]');
+    if (!fullName.value.trim()) {
+        e.preventDefault();
+        alert('Please enter your full name');
+        fullName.focus();
+        return false;
+    }
 });
 </script>
 

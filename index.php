@@ -4,13 +4,14 @@ requireLogin();
 
 $user = getCurrentUser();
 
-// Handle post creation with media
+// Handle post creation with media and privacy
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['content'])) {
     $content = trim($_POST['content']);
     $post_type = $_POST['post_type'] ?? 'text';
     $location_name = $_POST['location_name'] ?? '';
     $latitude = $_POST['latitude'] ?? null;
     $longitude = $_POST['longitude'] ?? null;
+    $privacy = $_POST['privacy'] ?? 'public';
     
     $image_file = null;
     $video_file = null;
@@ -39,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['content'])) {
     
     if (!empty($content) || $image_file || $video_file || ($latitude && $longitude)) {
         $stmt = $pdo->prepare("
-            INSERT INTO posts (user_id, content, image, post_type, location_name, latitude, longitude, video_thumbnail) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO posts (user_id, content, image, post_type, location_name, latitude, longitude, video_thumbnail, privacy) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $_SESSION['user_id'], 
@@ -50,17 +51,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['content'])) {
             $location_name, 
             $latitude, 
             $longitude, 
-            $video_thumbnail
+            $video_thumbnail,
+            $privacy
         ]);
         
-        $_SESSION['post_created'] = true;
+        $_SESSION['success'] = "Post created successfully!";
         header("Location: index.php");
         exit();
     }
 }
 
-// Get posts with media using the new function
-$posts = getPostsWithDeletionCheck($_SESSION['user_id']);
+// Get posts with privacy check
+$posts = getPostsWithPrivacyCheck($_SESSION['user_id']);
 ?>
 
 <?php include 'header.php'; ?>
@@ -79,7 +81,23 @@ $posts = getPostsWithDeletionCheck($_SESSION['user_id']);
         <div class="card mb-4 create-post-card">
             <div class="card-body">
                 <div class="d-flex align-items-center mb-3">
-                    <img src="uploads/<?php echo $user['profile_picture']; ?>" class="profile-pic me-3" alt="Profile">
+                    <?php
+                    $displayName = $user['full_name'] ?? $user['username'];
+                    $initials = mb_strtoupper(mb_substr(trim($displayName), 0, 2));
+
+                    $pic = $user['profile_picture'] ?? '';
+                    $picPath = __DIR__ . '/uploads/' . $pic;
+
+                    // Circular avatar card
+                    echo '<div class="avatar-card me-3" style="width:64px;height:64px;border-radius:50%;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:#f5f5f5;box-shadow:0 2px 6px rgba(0,0,0,.08);">';
+                    if (!empty($pic) && file_exists($picPath)) {
+                        echo '<img src="uploads/' . htmlspecialchars($pic) . '" alt="' . htmlspecialchars($displayName) . '" style="width:100%;height:100%;object-fit:cover;">';
+                    } else {
+                        // fallback initials badge
+                        echo '<div class="profile-pic-initials" style="font-weight:700;color:#555;font-size:20px;">' . htmlspecialchars($initials) . '</div>';
+                    }
+                    echo '</div>';
+                    ?>
                     <div class="flex-grow-1">
                         <h6 class="mb-0"><?php echo htmlspecialchars($user['full_name'] ?? $user['username']); ?></h6>
                         <small class="text-muted">Share what's on your mind</small>
@@ -92,8 +110,29 @@ $posts = getPostsWithDeletionCheck($_SESSION['user_id']);
                     <input type="hidden" name="latitude" id="latitude">
                     <input type="hidden" name="longitude" id="longitude">
                     
+                    <!-- Privacy Selector -->
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Who can see this post?</strong></label>
+                        <div class="privacy-selector">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="privacy" id="privacyPublic" value="public" checked>
+                                <label class="form-check-label" for="privacyPublic">
+                                    <i class="fas fa-globe me-1 text-primary"></i> Public
+                                    <small class="d-block text-muted">Visible to everyone</small>
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="privacy" id="privacyFriends" value="friends">
+                                <label class="form-check-label" for="privacyFriends">
+                                    <i class="fas fa-users me-1 text-success"></i> Friends Only
+                                    <small class="d-block text-muted">Only your friends can see</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Post Type Selector -->
-                    <div class="post-type-selector">
+                    <div class="post-type-selector mb-3">
                         <div class="post-type-btn active" data-type="text">
                             <i class="fas fa-edit"></i>
                             <span>Text</span>
@@ -203,53 +242,56 @@ $posts = getPostsWithDeletionCheck($_SESSION['user_id']);
         <div class="card post-card mb-4" style="animation-delay: <?php echo $index * 0.1; ?>s">
             <div class="card-body">
                 <!-- Post Header -->
-                <div class="d-flex align-items-center mb-3">
-                    <div class="position-relative">
-                        <img src="uploads/<?php echo $post['profile_picture']; ?>" class="profile-pic me-3" alt="Profile">
-                        <div class="online-status"></div>
+                <div class="d-flex align-items-center mb-3 flex-wrap">
+                    <div class="position-relative me-3">
+                        <img src="uploads/<?php echo $post['profile_picture']; ?>" 
+                                 class="profile-pic me-3" 
+                                 alt="<?php echo htmlspecialchars($post['username']); ?>"
+                                 onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($post['username']); ?>&background=6366f1&color=fff'"> <div class="online-status"></div>
                     </div>
-                    <div class="flex-grow-1">
+                    <div class="flex-grow-1 me-3">
                         <h6 class="mb-0"><?php echo htmlspecialchars($post['username']); ?></h6>
                         <small class="text-muted"><?php echo date('M j, Y g:i A', strtotime($post['created_at'])); ?></small>
                     </div>
-                    <span class="post-type-badge">
-                        <i class="fas fa-<?php 
-                            switch($post['post_type']) {
-                                case 'image': echo 'image'; break;
-                                case 'video': echo 'video'; break;
-                                case 'location': echo 'map-marker-alt'; break;
-                                default: echo 'file-alt';
-                            }
-                        ?> me-1"></i>
-                        <?php echo ucfirst($post['post_type']); ?>
-                    </span>
                     
-                    <!-- Dropdown Menu -->
-                    <div class="dropdown">
-                      <!--   <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-ellipsis-h"></i>
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- Privacy Badge -->
+                        <span class="privacy-badge privacy-<?php echo $post['privacy']; ?>">
+                            <i class="fas fa-<?php echo $post['privacy'] === 'public' ? 'globe' : 'users'; ?> me-1"></i>
+                            <?php echo ucfirst($post['privacy']); ?>
+                        </span>
                         
-                        </button>
-                         -->
-                             <a class="dropdown-item text-danger" 
-                                   href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode($_SERVER['REQUEST_URI']); ?>">
-                                    <i class="fas fa-trash me-2"></i>Delete Post
-                                </a>
+                        <!-- Post Type Badge -->
+                        <span class="post-type-badge">
+                            <i class="fas fa-<?php 
+                                switch($post['post_type']) {
+                                    case 'image': echo 'image'; break;
+                                    case 'video': echo 'video'; break;
+                                    case 'location': echo 'map-marker-alt'; break;
+                                    default: echo 'file-alt';
+                                }
+                            ?> me-1"></i>
+                            <?php echo ucfirst($post['post_type']); ?>
+                        </span>
                         
-
-                       <!--  <ul class="dropdown-menu">
-                            <?php if ($post['user_id'] == $_SESSION['user_id']): ?>
-                            <li>
-                                <a class="dropdown-item text-danger" 
-                                   href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode($_SERVER['REQUEST_URI']); ?>">
-                                    <i class="fas fa-trash me-2"></i>Delete Post
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <?php endif; ?>
-                            <li><a class="dropdown-item" href="#"><i class="fas fa-bookmark me-2"></i>Save Post</a></li>
-                            <li><a class="dropdown-item" href="#"><i class="fas fa-share me-2"></i>Share</a></li>
-                        </ul> -->
+                        <!-- Dropdown Menu -->
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <?php if ($post['user_id'] == $_SESSION['user_id']): ?>
+                                <li>
+                                    <a class="dropdown-item text-danger" 
+                                       href="delete_confirm.php?type=post&id=<?php echo $post['id']; ?>&redirect=<?php echo urlencode($_SERVER['REQUEST_URI']); ?>">
+                                        <i class="fas fa-trash me-2"></i>Delete Post
+                                    </a>
+                                </li>
+                                <?php endif; ?>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-bookmark me-2"></i>Save Post</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-share me-2"></i>Share</a></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 
@@ -329,7 +371,7 @@ $posts = getPostsWithDeletionCheck($_SESSION['user_id']);
                     </button>
                 </div>
 
-                <!-- Comments Section - FIXED CODE -->
+                <!-- Comments Section -->
                 <div class="collapse" id="comments-<?php echo $post['id']; ?>">
                     <?php
                     // Get comments for this specific post
@@ -340,7 +382,7 @@ $posts = getPostsWithDeletionCheck($_SESSION['user_id']);
                         WHERE c.post_id = ? 
                         ORDER BY c.created_at ASC
                     ");
-                    $comment_stmt->execute([$post['id']]); // Use $post['id'] from the loop
+                    $comment_stmt->execute([$post['id']]);
                     $comments = $comment_stmt->fetchAll(PDO::FETCH_ASSOC);
                     ?>
                     

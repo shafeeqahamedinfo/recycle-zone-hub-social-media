@@ -595,4 +595,73 @@ function cleanupInactiveUsers() {
 // Call this function on every page load to update activity
 updateCurrentUserActivity();
 
+
+function getPostsWithPrivacyCheck($user_id) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("
+        SELECT p.*, 
+               u.username, 
+               u.profile_picture,
+               u.full_name,
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+               EXISTS(SELECT 1 FROM likes WHERE post_id = p.id AND user_id = ?) as user_liked,
+               EXISTS(SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = p.user_id AND status = 'accepted') 
+                      OR (user_id = p.user_id AND friend_id = ? AND status = 'accepted')) as is_friend
+        FROM posts p 
+        JOIN users u ON p.user_id = u.id 
+        WHERE (p.privacy = 'public' 
+               OR (p.privacy = 'friends' AND (
+                   EXISTS(SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = p.user_id AND status = 'accepted') 
+                          OR (user_id = p.user_id AND friend_id = ? AND status = 'accepted'))
+                   OR p.user_id = ?
+               )))
+        ORDER BY p.created_at DESC
+    ");
+    
+    $stmt->execute([$user_id, $user_id, $user_id, $user_id, $user_id, $user_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+// Get all public posts for public viewing
+function getPublicPosts() {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("
+        SELECT p.*, 
+               u.username, 
+               u.profile_picture,
+               u.full_name,
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count,
+               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+        FROM posts p 
+        JOIN users u ON p.user_id = u.id 
+        WHERE p.privacy = 'public'
+        ORDER BY p.created_at DESC
+        LIMIT 20
+    ");
+    
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Get total user count
+function getTotalUserCount() {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE active = 1");
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'] ?? 0;
+}
+
+// Get total post count
+function getTotalPostCount() {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM posts WHERE privacy = 'public'");
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'] ?? 0;
+}
 ?>
